@@ -12,7 +12,7 @@
     "SOCRadarAPIKey": {
       "type": "securestring",
       "metadata": {
-        "description": "SOCRadar API Key - https://platform.socradar.com adresinden alınabilir"
+        "description": "SOCRadar API Key - [https://platform.socradar.com](https://platform.socradar.com) adresinden alınabilir"
       }
     },
     "WorkspaceName": {
@@ -99,6 +99,18 @@
             }
           },
           "actions": {
+            "Initialize_Alarm_ID_Variable": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AlarmID",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
             "Check_Incident_Status": {
               "type": "If",
               "expression": {
@@ -111,28 +123,16 @@
                   }
                 ]
               },
+              "runAfter": {
+                "Initialize_Alarm_ID_Variable": [
+                  "Succeeded"
+                ]
+              },
               "actions": {
-                "Initialize_Alarm_ID_Variable": {
-                  "type": "InitializeVariable",
-                  "inputs": {
-                    "variables": [
-                      {
-                        "name": "AlarmID",
-                        "type": "string",
-                        "value": ""
-                      }
-                    ]
-                  },
-                  "runAfter": {}
-                },
                 "Get_Alert_Product_Names": {
                   "type": "Compose",
                   "inputs": "@triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames']",
-                  "runAfter": {
-                    "Initialize_Alarm_ID_Variable": [
-                      "Succeeded"
-                    ]
-                  }
+                  "runAfter": {}
                 },
                 "Loop_Through_Product_Names": {
                   "type": "Foreach",
@@ -156,8 +156,7 @@
                           "inputs": {
                             "name": "AlarmID",
                             "value": "@replace(items('Loop_Through_Product_Names'), 'SOCRadar-AlarmID-', '')"
-                          },
-                          "runAfter": {}
+                          }
                         }
                       },
                       "runAfter": {}
@@ -214,8 +213,7 @@
                                   ],
                                   "comments": "Incident closed as False Positive in Azure Sentinel. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
                                 }
-                              },
-                              "runAfter": {}
+                              }
                             }
                           }
                         },
@@ -237,8 +235,7 @@
                                   ],
                                   "comments": "Incident resolved in Azure Sentinel. Classification: @{triggerBody()?['object']?['properties']?['classification']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
                                 }
-                              },
-                              "runAfter": {}
+                              }
                             }
                           }
                         }
@@ -260,12 +257,10 @@
                                 ],
                                 "comments": "Incident closed in Azure Sentinel. Reason: @{triggerBody()?['object']?['properties']?['classificationReason']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
                               }
-                            },
-                            "runAfter": {}
+                            }
                           }
                         }
-                      },
-                      "runAfter": {}
+                      }
                     },
                     "Add_Comment_to_Sentinel_Incident": {
                       "type": "ApiConnection",
@@ -310,14 +305,12 @@
                             "incidentArmId": "@triggerBody()?['object']?['id']",
                             "message": "⚠️ SOCRadar Alarm ID bulunamadı. Alert'lerin 'ProductName' alanında 'SOCRadar-AlarmID-[ID]' formatında olmalı."
                           }
-                        },
-                        "runAfter": {}
+                        }
                       }
                     }
                   }
                 }
-              },
-              "runAfter": {}
+              }
             }
           },
           "outputs": {}
