@@ -1,171 +1,179 @@
 {
-  "definition": {
-    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-    "contentVersion": "1.0.0.0",
-    "triggers": {
-      "Microsoft_Sentinel_incident": {
-        "type": "ApiConnectionWebhook",
-        "inputs": {
-          "host": {
-            "connection": {
-              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-            }
-          },
-          "body": {
-            "callback_url": "@{listCallbackUrl()}"
-          },
-          "path": "/incident-update"
-        }
-      }
-    },
-    "actions": {
-      "Initialize_AlarmID": {
-        "runAfter": {},
-        "type": "InitializeVariable",
-        "inputs": {
-          "variables": [
-            {
-              "name": "AlarmID",
-              "type": "string",
-              "value": ""
-            }
-          ]
-        }
-      },
-      "Check_Incident_Status": {
-        "runAfter": {
-          "Initialize_AlarmID": [
-            "Succeeded"
-          ]
-        },
-        "type": "If",
-        "expression": {
-          "equals": [
-            "@triggerBody()?['object']?['properties']?['status']",
-            "Closed"
-          ]
-        },
-        "actions": {
-          "Extract_AlarmID_From_Title": {
-            "type": "SetVariable",
-            "inputs": {
-              "name": "AlarmID",
-              "value": "@trim(last(split(triggerBody()?['object']?['properties']?['title'], '-')))"
-            }
-          },
-          "Determine_Close_Reason": {
-            "type": "Switch",
-            "expression": "@triggerBody()?['object']?['properties']?['classification']",
-            "cases": {
-              "FalsePositive": {
-                "case": "FalsePositive",
-                "actions": {
-                  "Close_as_False_Positive_in_SOCRadar": {
-                    "type": "Http",
-                    "inputs": {
-                      "method": "POST",
-                      "uri": "@{concat(parameters('SOCRadarAPIEndpoint'), '/company/', parameters('SOCRadarCompanyId'), '/alarms/status/change')}",
-                      "headers": {
-                        "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
-                        "Content-Type": "application/json"
-                      },
-                      "body": {
-                        "alarm_ids": [
-                          "@variables('AlarmID')"
-                        ],
-                        "status": 9,
-                        "comments": "❌ False Positive - Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            "default": {
-              "actions": {
-                "Close_as_Resolved_in_SOCRadar": {
-                  "type": "Http",
-                  "inputs": {
-                    "method": "POST",
-                    "uri": "@{concat(parameters('SOCRadarAPIEndpoint'), '/company/', parameters('SOCRadarCompanyId'), '/alarms/status/change')}",
-                    "headers": {
-                      "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
-                      "Content-Type": "application/json"
-                    },
-                    "body": {
-                      "alarm_ids": [
-                        "@variables('AlarmID')"
-                      ],
-                      "status": 2,
-                      "comments": "✅ Resolved - Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "Add_Comment_To_Sentinel_Incident": {
-            "runAfter": {
-              "Determine_Close_Reason": [
-                "Succeeded"
-              ]
-            },
-            "type": "ApiConnection",
-            "inputs": {
-              "host": {
-                "connection": {
-                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                }
-              },
-              "method": "post",
-              "path": "/Incidents/Comment",
-              "body": {
-                "incidentArmId": "@triggerBody()?['object']?['id']",
-                "message": "✅ SOCRadar alarm updated. Alarm ID: @{variables('AlarmID')}"
-              }
-            }
-          }
-        },
-        "else": {
-          "actions": {}
-        }
-      }
-    },
-    "parameters": {
-      "SOCRadarAPIKey": {
-        "type": "SecureString"
-      },
-      "SOCRadarAPIEndpoint": {
-        "defaultValue": "https://platform.socradar.com/api",
-        "type": "String"
-      },
-      "SOCRadarCompanyId": {
-        "type": "String"
-      },
-      "$connections": {
-        "type": "Object",
-        "defaultValue": {}
-      }
-    }
-  },
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
   "parameters": {
-    "SOCRadarAPIKey": {},
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "SOCRadar-CloseAlarm-OnIncidentClose"
+    },
+    "SOCRadarAPIKey": {
+      "type": "SecureString"
+    },
+    "SOCRadarAPIEndpoint": {
+      "type": "String",
+      "defaultValue": "https://platform.socradar.com/api"
+    },
     "SOCRadarCompanyId": {
+      "type": "String",
       "defaultValue": "330"
     },
     "$connections": {
-      "value": {
-        "azuresentinel": {
-          "connectionId": "/subscriptions/6fc315b1-e624-4ca1-9d8c-288b264ae0a9/resourceGroups/resourceapps/providers/Microsoft.Web/connections/azuresentinel-SOCRadar-CloseAlarm-OnIncidentClose",
-          "connectionName": "azuresentinel-SOCRadar-CloseAlarm-OnIncidentClose",
-          "id": "/subscriptions/6fc315b1-e624-4ca1-9d8c-288b264ae0a9/providers/Microsoft.Web/locations/northeurope/managedApis/azuresentinel",
-          "connectionProperties": {
-            "authentication": {
-              "type": "ManagedServiceIdentity"
+      "type": "Object"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-update"
+              }
             }
+          },
+          "actions": {
+            "Initialize_AlarmID": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AlarmID",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Check_Incident_Status": {
+              "runAfter": {
+                "Initialize_AlarmID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "equals": [
+                  "@triggerBody()?['object']?['properties']?['status']",
+                  "Closed"
+                ]
+              },
+              "actions": {
+                "Extract_AlarmID_From_Title": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "AlarmID",
+                    "value": "@trim(last(split(triggerBody()?['object']?['properties']?['title'], '-')))"
+                  }
+                },
+                "Determine_Close_Reason": {
+                  "type": "Switch",
+                  "expression": "@triggerBody()?['object']?['properties']?['classification']",
+                  "cases": {
+                    "FalsePositive": {
+                      "case": "FalsePositive",
+                      "actions": {
+                        "Close_as_False_Positive_in_SOCRadar": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@{concat(parameters('SOCRadarAPIEndpoint'), '/company/', parameters('SOCRadarCompanyId'), '/alarms/status/change')}",
+                            "method": "POST",
+                            "headers": {
+                              "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "alarm_ids": [
+                                "@variables('AlarmID')"
+                              ],
+                              "status": 9,
+                              "comments": "❌ False Positive - Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "default": {
+                    "actions": {
+                      "Close_as_Resolved_in_SOCRadar": {
+                        "type": "Http",
+                        "inputs": {
+                          "uri": "@{concat(parameters('SOCRadarAPIEndpoint'), '/company/', parameters('SOCRadarCompanyId'), '/alarms/status/change')}",
+                          "method": "POST",
+                          "headers": {
+                            "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
+                            "Content-Type": "application/json"
+                          },
+                          "body": {
+                            "alarm_ids": [
+                              "@variables('AlarmID')"
+                            ],
+                            "status": 2,
+                            "comments": "✅ Resolved - Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Add_Comment_To_Sentinel_Incident": {
+                  "runAfter": {
+                    "Determine_Close_Reason": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "✅ SOCRadar alarm updated. Alarm ID: @{variables('AlarmID')}"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": "[parameters('$connections')]"
+          },
+          "SOCRadarAPIKey": {
+            "value": "[parameters('SOCRadarAPIKey')]"
+          },
+          "SOCRadarAPIEndpoint": {
+            "value": "[parameters('SOCRadarAPIEndpoint')]"
+          },
+          "SOCRadarCompanyId": {
+            "value": "[parameters('SOCRadarCompanyId')]"
           }
         }
       }
     }
-  }
+  ]
 }
