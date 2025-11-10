@@ -12,7 +12,13 @@
     "SOCRadarAPIKey": {
       "type": "securestring",
       "metadata": {
-        "description": "SOCRadar API Key - [https://platform.socradar.com](https://platform.socradar.com) adresinden alınabilir"
+        "description": "SOCRadar API Key - https://platform.socradar.com adresinden alınabilir"
+      }
+    },
+    "SOCRadarCompanyId": {
+      "type": "string",
+      "metadata": {
+        "description": "SOCRadar Company ID"
       }
     },
     "WorkspaceName": {
@@ -55,7 +61,7 @@
       "location": "[resourceGroup().location]",
       "tags": {
         "hidden-SentinelTemplateName": "SOCRadar-Integration",
-        "hidden-SentinelTemplateVersion": "1.0"
+        "hidden-SentinelTemplateVersion": "2.1"
       },
       "identity": {
         "type": "SystemAssigned"
@@ -80,6 +86,10 @@
             "SOCRadarAPIEndpoint": {
               "defaultValue": "[variables('SOCRadarAPIEndpoint')]",
               "type": "String"
+            },
+            "SOCRadarCompanyId": {
+              "defaultValue": "[parameters('SOCRadarCompanyId')]",
+              "type": "String"
             }
           },
           "triggers": {
@@ -99,18 +109,6 @@
             }
           },
           "actions": {
-            "Initialize_Alarm_ID_Variable": {
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "AlarmID",
-                    "type": "string",
-                    "value": ""
-                  }
-                ]
-              }
-            },
             "Check_Incident_Status": {
               "type": "If",
               "expression": {
@@ -123,52 +121,179 @@
                   }
                 ]
               },
-              "runAfter": {
-                "Initialize_Alarm_ID_Variable": [
-                  "Succeeded"
-                ]
-              },
               "actions": {
-                "Get_Alert_Product_Names": {
-                  "type": "Compose",
-                  "inputs": "@triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames']",
+                "Initialize_AlarmID_Variable": {
+                  "type": "InitializeVariable",
+                  "inputs": {
+                    "variables": [
+                      {
+                        "name": "AlarmID",
+                        "type": "string",
+                        "value": ""
+                      }
+                    ]
+                  },
                   "runAfter": {}
                 },
-                "Loop_Through_Product_Names": {
-                  "type": "Foreach",
-                  "foreach": "@outputs('Get_Alert_Product_Names')",
-                  "actions": {
-                    "Check_If_SOCRadar_Alert": {
-                      "type": "If",
-                      "expression": {
-                        "and": [
-                          {
-                            "contains": [
-                              "@items('Loop_Through_Product_Names')",
-                              "SOCRadar-AlarmID-"
-                            ]
-                          }
-                        ]
-                      },
-                      "actions": {
-                        "Set_Alarm_ID": {
-                          "type": "SetVariable",
-                          "inputs": {
-                            "name": "AlarmID",
-                            "value": "@replace(items('Loop_Through_Product_Names'), 'SOCRadar-AlarmID-', '')"
-                          }
-                        }
-                      },
-                      "runAfter": {}
-                    }
-                  },
+                "Get_Incident_Title": {
+                  "type": "Compose",
+                  "inputs": "@triggerBody()?['object']?['properties']?['title']",
                   "runAfter": {
-                    "Get_Alert_Product_Names": [
+                    "Initialize_AlarmID_Variable": [
                       "Succeeded"
                     ]
                   }
                 },
-                "Check_if_Alarm_ID_exists": {
+                "Check_If_Title_Contains_AlarmID": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "contains": [
+                          "@outputs('Get_Incident_Title')",
+                          "Alarm ID"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Extract_AlarmID_From_Title": {
+                      "type": "Compose",
+                      "inputs": "@split(outputs('Get_Incident_Title'), 'Alarm ID')",
+                      "runAfter": {}
+                    },
+                    "Get_AlarmID_Part": {
+                      "type": "Compose",
+                      "inputs": "@last(outputs('Extract_AlarmID_From_Title'))",
+                      "runAfter": {
+                        "Extract_AlarmID_From_Title": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Clean_AlarmID": {
+                      "type": "Compose",
+                      "inputs": "@trim(replace(replace(replace(replace(outputs('Get_AlarmID_Part'), ':', ''), '-', ''), ' ', ''), '.', ''))",
+                      "runAfter": {
+                        "Get_AlarmID_Part": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Extract_Numeric_AlarmID": {
+                      "type": "Compose",
+                      "inputs": "@if(greater(length(outputs('Clean_AlarmID')), 0), if(contains(outputs('Clean_AlarmID'), '|'), first(split(outputs('Clean_AlarmID'), '|')), outputs('Clean_AlarmID')), '')",
+                      "runAfter": {
+                        "Clean_AlarmID": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Set_AlarmID_Variable": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "AlarmID",
+                        "value": "@{outputs('Extract_Numeric_AlarmID')}"
+                      },
+                      "runAfter": {
+                        "Extract_Numeric_AlarmID": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Get_Incident_Title": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Check_Alternative_Format_Hyphen": {
+                        "type": "If",
+                        "expression": {
+                          "or": [
+                            {
+                              "contains": [
+                                "@outputs('Get_Incident_Title')",
+                                "AlarmID"
+                              ]
+                            },
+                            {
+                              "contains": [
+                                "@outputs('Get_Incident_Title')",
+                                "Alarm-ID"
+                              ]
+                            },
+                            {
+                              "contains": [
+                                "@outputs('Get_Incident_Title')",
+                                "alarm-id"
+                              ]
+                            }
+                          ]
+                        },
+                        "actions": {
+                          "Try_Alternative_Parse": {
+                            "type": "Compose",
+                            "inputs": "@replace(replace(replace(outputs('Get_Incident_Title'), 'AlarmID', 'Alarm ID'), 'Alarm-ID', 'Alarm ID'), 'alarm-id', 'Alarm ID')",
+                            "runAfter": {}
+                          },
+                          "Extract_From_Alternative": {
+                            "type": "Compose",
+                            "inputs": "@split(outputs('Try_Alternative_Parse'), 'Alarm ID')",
+                            "runAfter": {
+                              "Try_Alternative_Parse": [
+                                "Succeeded"
+                              ]
+                            }
+                          },
+                          "Get_Last_Part_Alternative": {
+                            "type": "Compose",
+                            "inputs": "@last(outputs('Extract_From_Alternative'))",
+                            "runAfter": {
+                              "Extract_From_Alternative": [
+                                "Succeeded"
+                              ]
+                            }
+                          },
+                          "Clean_Alternative_ID": {
+                            "type": "Compose",
+                            "inputs": "@trim(replace(replace(replace(replace(outputs('Get_Last_Part_Alternative'), ':', ''), '-', ''), ' ', ''), '.', ''))",
+                            "runAfter": {
+                              "Get_Last_Part_Alternative": [
+                                "Succeeded"
+                              ]
+                            }
+                          },
+                          "Extract_Numeric_Alternative": {
+                            "type": "Compose",
+                            "inputs": "@if(greater(length(outputs('Clean_Alternative_ID')), 0), if(contains(outputs('Clean_Alternative_ID'), '|'), first(split(outputs('Clean_Alternative_ID'), '|')), outputs('Clean_Alternative_ID')), '')",
+                            "runAfter": {
+                              "Clean_Alternative_ID": [
+                                "Succeeded"
+                              ]
+                            }
+                          },
+                          "Set_AlarmID_Alternative": {
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "AlarmID",
+                              "value": "@{outputs('Extract_Numeric_Alternative')}"
+                            },
+                            "runAfter": {
+                              "Extract_Numeric_Alternative": [
+                                "Succeeded"
+                              ]
+                            }
+                          }
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  }
+                },
+                "Validate_AlarmID": {
                   "type": "If",
                   "expression": {
                     "and": [
@@ -187,6 +312,12 @@
                             null
                           ]
                         }
+                      },
+                      {
+                        "greater": [
+                          "@length(variables('AlarmID'))",
+                          0
+                        ]
                       }
                     ]
                   },
@@ -202,7 +333,7 @@
                               "type": "Http",
                               "inputs": {
                                 "method": "POST",
-                                "uri": "@{parameters('SOCRadarAPIEndpoint')}/incidents/@{variables('AlarmID')}/false-positive",
+                                "uri": "@{parameters('SOCRadarAPIEndpoint')}/company/@{parameters('SOCRadarCompanyId')}/incidents/@{variables('AlarmID')}/false-positive",
                                 "headers": {
                                   "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
                                   "Content-Type": "application/json"
@@ -211,9 +342,10 @@
                                   "alarmIds": [
                                     "@int(variables('AlarmID'))"
                                   ],
-                                  "comments": "Incident closed as False Positive in Azure Sentinel. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                                  "comments": "❌ Incident Azure Sentinel'de False Positive olarak kapatıldı. Incident Title: @{triggerBody()?['object']?['properties']?['title']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}. Kapatma sebebi: @{triggerBody()?['object']?['properties']?['classificationComment']}"
                                 }
-                              }
+                              },
+                              "runAfter": {}
                             }
                           }
                         },
@@ -224,7 +356,7 @@
                               "type": "Http",
                               "inputs": {
                                 "method": "POST",
-                                "uri": "@{parameters('SOCRadarAPIEndpoint')}/incidents/@{variables('AlarmID')}/resolve",
+                                "uri": "@{parameters('SOCRadarAPIEndpoint')}/company/@{parameters('SOCRadarCompanyId')}/incidents/@{variables('AlarmID')}/resolve",
                                 "headers": {
                                   "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
                                   "Content-Type": "application/json"
@@ -233,9 +365,33 @@
                                   "alarmIds": [
                                     "@int(variables('AlarmID'))"
                                   ],
-                                  "comments": "Incident resolved in Azure Sentinel. Classification: @{triggerBody()?['object']?['properties']?['classification']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                                  "comments": "✅ Incident Azure Sentinel'de True Positive olarak çözümlendi. Classification: @{triggerBody()?['object']?['properties']?['classification']}. Sub-classification: @{triggerBody()?['object']?['properties']?['classificationReason']}. Incident Title: @{triggerBody()?['object']?['properties']?['title']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}. Yorum: @{triggerBody()?['object']?['properties']?['classificationComment']}"
                                 }
-                              }
+                              },
+                              "runAfter": {}
+                            }
+                          }
+                        },
+                        "BenignPositive": {
+                          "case": "BenignPositive",
+                          "actions": {
+                            "Resolve_as_BenignPositive_in_SOCRadar": {
+                              "type": "Http",
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@{parameters('SOCRadarAPIEndpoint')}/company/@{parameters('SOCRadarCompanyId')}/incidents/@{variables('AlarmID')}/resolve",
+                                "headers": {
+                                  "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
+                                  "Content-Type": "application/json"
+                                },
+                                "body": {
+                                  "alarmIds": [
+                                    "@int(variables('AlarmID'))"
+                                  ],
+                                  "comments": "ℹ️ Incident Azure Sentinel'de Benign Positive olarak çözümlendi. Classification Reason: @{triggerBody()?['object']?['properties']?['classificationReason']}. Incident Title: @{triggerBody()?['object']?['properties']?['title']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}. Yorum: @{triggerBody()?['object']?['properties']?['classificationComment']}"
+                                }
+                              },
+                              "runAfter": {}
                             }
                           }
                         }
@@ -246,7 +402,7 @@
                             "type": "Http",
                             "inputs": {
                               "method": "POST",
-                              "uri": "@{parameters('SOCRadarAPIEndpoint')}/incidents/@{variables('AlarmID')}/resolve",
+                              "uri": "@{parameters('SOCRadarAPIEndpoint')}/company/@{parameters('SOCRadarCompanyId')}/incidents/@{variables('AlarmID')}/resolve",
                               "headers": {
                                 "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
                                 "Content-Type": "application/json"
@@ -255,12 +411,14 @@
                                 "alarmIds": [
                                   "@int(variables('AlarmID'))"
                                 ],
-                                "comments": "Incident closed in Azure Sentinel. Reason: @{triggerBody()?['object']?['properties']?['classificationReason']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                                "comments": "ℹ️ Incident Azure Sentinel'de kapatıldı. Classification: @{triggerBody()?['object']?['properties']?['classification']}. Sebep: @{triggerBody()?['object']?['properties']?['classificationReason']}. Incident Title: @{triggerBody()?['object']?['properties']?['title']}. Incident ID: @{triggerBody()?['object']?['properties']?['incidentNumber']}. Yorum: @{triggerBody()?['object']?['properties']?['classificationComment']}"
                               }
-                            }
+                            },
+                            "runAfter": {}
                           }
                         }
-                      }
+                      },
+                      "runAfter": {}
                     },
                     "Add_Comment_to_Sentinel_Incident": {
                       "type": "ApiConnection",
@@ -274,7 +432,7 @@
                         "path": "/Incidents/Comment",
                         "body": {
                           "incidentArmId": "@triggerBody()?['object']?['id']",
-                          "message": "✅ SOCRadar alarm automatically closed. Alarm ID: @{variables('AlarmID')}"
+                          "message": "✅ SOCRadar alarm otomatik olarak senkronize edildi. Alarm ID: @{variables('AlarmID')}"
                         }
                       },
                       "runAfter": {
@@ -285,7 +443,7 @@
                     }
                   },
                   "runAfter": {
-                    "Loop_Through_Product_Names": [
+                    "Check_If_Title_Contains_AlarmID": [
                       "Succeeded"
                     ]
                   },
@@ -303,14 +461,16 @@
                           "path": "/Incidents/Comment",
                           "body": {
                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                            "message": "⚠️ SOCRadar Alarm ID bulunamadı. Alert'lerin 'ProductName' alanında 'SOCRadar-AlarmID-[ID]' formatında olmalı."
+                            "message": "⚠️ SOCRadar Alarm ID bulunamadı. Incident title'da 'Alarm ID: [SAYI]' veya 'AlarmID: [SAYI]' formatında olmalıdır. Mevcut title: @{triggerBody()?['object']?['properties']?['title']}"
                           }
-                        }
+                        },
+                        "runAfter": {}
                       }
                     }
                   }
                 }
-              }
+              },
+              "runAfter": {}
             }
           },
           "outputs": {}
@@ -342,6 +502,10 @@
     "PlaybookResourceId": {
       "type": "string",
       "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'full').identity.principalId]"
     }
   }
 }
