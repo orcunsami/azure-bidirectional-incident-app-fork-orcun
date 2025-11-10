@@ -17,10 +17,10 @@
       "type": "String",
       "defaultValue": "330"
     },
-    "AzureSentinelConnectionName": {
+    "ExistingAzureSentinelConnectionId": {
       "type": "String",
       "metadata": {
-        "description": "Logic App için Azure Sentinel connection resource ID"
+        "description": "Mevcut Azure Sentinel Connection Resource ID"
       }
     }
   },
@@ -75,8 +75,7 @@
                     "value": ""
                   }
                 ]
-              },
-              "runAfter": {}
+              }
             },
             "Check_Incident_Status": {
               "type": "If",
@@ -87,9 +86,7 @@
                 ]
               },
               "runAfter": {
-                "Initialize_AlarmID": [
-                  "Succeeded"
-                ]
+                "Initialize_AlarmID": ["Succeeded"]
               },
               "actions": {
                 "Extract_AlarmID_From_Title": {
@@ -116,9 +113,7 @@
                               "Content-Type": "application/json"
                             },
                             "body": {
-                              "alarm_ids": [
-                                "@variables('AlarmID')"
-                              ],
+                              "alarm_ids": ["@variables('AlarmID')"],
                               "status": 9,
                               "comments": "❌ False Positive - Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
                             }
@@ -139,9 +134,7 @@
                             "Content-Type": "application/json"
                           },
                           "body": {
-                            "alarm_ids": [
-                              "@variables('AlarmID')"
-                            ],
+                            "alarm_ids": ["@variables('AlarmID')"],
                             "status": 2,
                             "comments": "✅ Resolved - Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
                           }
@@ -153,9 +146,7 @@
                 "Add_Comment_To_Sentinel_Incident": {
                   "type": "ApiConnection",
                   "runAfter": {
-                    "Determine_Close_Reason": [
-                      "Succeeded"
-                    ]
+                    "Determine_Close_Reason": ["Succeeded"]
                   },
                   "inputs": {
                     "host": {
@@ -180,7 +171,7 @@
         },
         "parameters": {
           "AzureSentinelConnectionName": {
-            "value": "[parameters('AzureSentinelConnectionName')]"
+            "value": "[parameters('ExistingAzureSentinelConnectionId')]"
           },
           "SOCRadarAPIKey": {
             "value": "[parameters('SOCRadarAPIKey')]"
