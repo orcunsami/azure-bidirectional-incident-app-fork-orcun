@@ -106,7 +106,7 @@
                 "body": {
                   "callback_url": "@{listCallbackUrl()}"
                 },
-                "path": "/incident-creation"
+                "path": "/incident-update"
               }
             }
           },
@@ -143,7 +143,7 @@
                   "type": "SetVariable",
                   "inputs": {
                     "name": "AlarmID",
-                    "value": "@if(empty(triggerBody()?['object']?['properties']?['title']), '', trim(last(split(triggerBody()?['object']?['properties']?['title'], '-'))))"
+                    "value": "@if(empty(triggerBody()?['object']?['properties']?['title']), '', trim(last(split(triggerBody()?['object']?['properties']?['title'], 'SOCRadar-AlarmID-'))))"
                   }
                 },
                 "Determine_Close_Reason": {
