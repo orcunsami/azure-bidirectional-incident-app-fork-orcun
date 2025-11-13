@@ -166,8 +166,8 @@
                               "Content-Type": "application/json"
                             },
                             "body": {
-                              "alarm_ids": ["@{variables('AlarmID')}"],
-                              "status": 9,
+                              "alarm_ids": "@{variables('AlarmID')}",
+                              "status": "9",
                               "comments": "@{concat('❌ False Positive - Sentinel Incident: ', coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 'Unknown'))}"
                             }
                           }
@@ -187,8 +187,8 @@
                             "Content-Type": "application/json"
                           },
                           "body": {
-                            "alarm_ids": ["@{variables('AlarmID')}"],
-                            "status": 2,
+                            "alarm_ids": "@{variables('AlarmID')}",
+                            "status": "2",
                             "comments": "@{concat('✅ Resolved - Sentinel Incident: ', coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 'Unknown'))}"
                           }
                         }
