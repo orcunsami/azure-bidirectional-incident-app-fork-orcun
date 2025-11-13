@@ -7,7 +7,10 @@
       "defaultValue": "SOCRadar-CloseAlarm-OnIncidentClose"
     },
     "SOCRadarAPIKey": {
-      "type": "SecureString"
+      "type": "SecureString",
+      "metadata": {
+        "description": "Your SOCRadar API Key (find in SOCRadar Platform → Settings → API Keys)"
+      }
     },
     "SOCRadarAPIEndpoint": {
       "type": "String",
@@ -15,7 +18,9 @@
     },
     "SOCRadarCompanyId": {
       "type": "String",
-      "defaultValue": "330"
+      "metadata": {
+        "description": "Your SOCRadar Company ID (find in SOCRadar Platform → Settings → Company Info)"
+      }
     },
     "SentinelConnectionName": {
       "type": "String",
