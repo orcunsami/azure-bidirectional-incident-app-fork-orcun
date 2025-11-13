@@ -1,7 +1,7 @@
 
 # SOCRadar - Azure Sentinel Automatic Integration
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FRadargoger%2Fazure-bidirectional-incident-app%2Frefs%2Fheads%2Fmain%2Fsocradar-sentinel-integration-arm.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Forcunsami%2Fazure-bidirectional-incident-app-fork-orcun%2Fmain%2Fsocradar-sentinel-integration-arm.json)
 
 ## 🎯 What Does It Do?
 
