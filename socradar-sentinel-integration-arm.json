@@ -167,7 +167,7 @@
                             "method": "POST",
                             "uri": "@{concat(parameters('SOCRadarAPIEndpoint'), '/company/', parameters('SOCRadarCompanyId'), '/alarms/status/change')}",
                             "headers": {
-                              "Authorization": "Bearer @{parameters('SOCRadarAPIKey')}",
+                              "API-KEY": "@{parameters('SOCRadarAPIKey')}",
                               "Content-Type": "application/json"
                             },
                             "body": {
