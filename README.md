@@ -67,12 +67,37 @@ New-AzResourceGroupDeployment `
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| **WorkspaceName** | ✅ Yes | - | Log Analytics workspace name where Sentinel is installed |
+| **WorkspaceName** | ✅ Yes | - | Log Analytics workspace **NAME** (not ID!) - e.g., `my-workspace-001` |
 | **SocradarApiKey** | ✅ Yes | - | Your SOCRadar API authentication token |
 | **CompanyId** | ✅ Yes | - | Your SOCRadar company ID |
 | PlaybookName | No | SOCRadar-CloseAlarm-Polling | Name for the Logic App |
 | PollingIntervalMinutes | No | 5 | Check frequency (1-60 minutes) |
 | Location | No | Resource group location | Azure region |
+
+---
+
+## ⚠️ CRITICAL: Workspace Name vs Workspace ID
+
+**COMMON MISTAKE:** Using Workspace **ID** instead of Workspace **NAME**
+
+### ❌ WRONG (Workspace ID - GUID format):
+```
+cab033c7-927c-46d1-bb24-7af8090ae3fc
+```
+
+### ✅ CORRECT (Workspace Name - string format):
+```
+company-log-analytics-workspace-0001
+```
+
+### How to Find Workspace Name:
+1. Azure Portal → **Log Analytics workspaces**
+2. Click on your workspace
+3. Copy the **Name** field (NOT the Workspace ID!)
+
+**Example:**
+- Name: `company-log-analytics-workspace-0001` ✅ Use this!
+- Workspace ID: `cab033c7-927c-46d1-bb24-7af8090ae3fc` ❌ Don't use this!
 
 ---
 
