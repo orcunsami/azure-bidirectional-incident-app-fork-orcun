@@ -1,42 +1,33 @@
-# 🚀 SOCRadar-Azure Sentinel Bidirectional Integration v2.0
+# SOCRadar-Azure Sentinel Bidirectional Integration
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Forcunsami%2Fazure-bidirectional-incident-app-fork-orcun%2Fmain%2Fsocradar-sentinel-integration-arm.json)
 
-## ✨ What's New in v2.0
+Automatically synchronize incident status between SOCRadar and Azure Sentinel. When you close a Sentinel incident, the corresponding SOCRadar alarm is automatically resolved.
 
-**MAJOR UPDATE:** Switched to **polling architecture** for fully automated deployment!
+## Architecture
 
-**Problems Solved:**
-- ✅ No more "Missing required permissions" errors
-- ✅ No manual portal configuration needed
-- ✅ Fully automated one-click deployment
-- ✅ Production-ready immediately
+This Logic App uses a polling mechanism to detect closed incidents in Sentinel and update SOCRadar alarms accordingly:
 
-**What Changed:**
-- 🔄 Trigger: `ApiConnectionWebhook` → `Recurrence` (polling every 5 minutes)
-- 🔄 Connector: `azuresentinel` → `azuremonitorlogs`
-- ❌ Removed: Automation Rule creation (not needed)
-- ❌ Removed: Deployment script (not needed)
+1. **Every 5 minutes** (configurable), the Logic App queries Sentinel for closed incidents
+2. **Filters** incidents with title pattern `SOCRadar-AlarmID-*`
+3. **Extracts** alarm ID from incident title
+4. **Updates** SOCRadar alarm status via API to RESOLVED
 
-**Trade-off:** 5-10 minute delay after closing incident (previously instant) - acceptable for this workflow.
+**Trade-off:** 5-10 minute delay after closing incident (acceptable for incident closure workflow).
 
----
+## Prerequisites
 
-## 🎯 Quick Start
+- Azure subscription with Microsoft Sentinel enabled
+- Existing Log Analytics Workspace with Sentinel
+- SOCRadar API Key and Company ID
 
-### Prerequisites
+## Deployment
 
-- Azure subscription with **Microsoft Sentinel enabled**
-- Existing **Log Analytics Workspace** with Sentinel
-- **SOCRadar API Key** and **Company ID**
+### Option 1: Portal (Recommended)
 
-### One-Click Deployment
+Click the **Deploy to Azure** button above and fill in the parameters.
 
-**Option 1: Portal (Recommended)**
-
-Click the **"Deploy to Azure"** button above, fill parameters, done!
-
-**Option 2: Azure CLI**
+### Option 2: Azure CLI
 
 ```bash
 az deployment group create \
@@ -49,7 +40,7 @@ az deployment group create \
     PollingIntervalMinutes=5
 ```
 
-**Option 3: PowerShell**
+### Option 3: PowerShell
 
 ```powershell
 New-AzResourceGroupDeployment `
@@ -61,99 +52,77 @@ New-AzResourceGroupDeployment `
   -PollingIntervalMinutes 5
 ```
 
----
-
-## 📋 Parameters
+## Parameters
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| **WorkspaceName** | ✅ Yes | - | Log Analytics workspace **NAME** (not ID!) - e.g., `my-workspace-001` |
-| **SocradarApiKey** | ✅ Yes | - | Your SOCRadar API authentication token |
-| **CompanyId** | ✅ Yes | - | Your SOCRadar company ID |
-| PlaybookName | No | SOCRadar-CloseAlarm-Polling | Name for the Logic App |
-| PollingIntervalMinutes | No | 5 | Check frequency (1-60 minutes) |
+| **WorkspaceName** | Yes | - | Log Analytics workspace **NAME** (not ID!) |
+| **SocradarApiKey** | Yes | - | SOCRadar API authentication token |
+| **CompanyId** | Yes | - | SOCRadar company identifier |
+| PlaybookName | No | SOCRadar-CloseAlarm-Polling | Logic App resource name |
+| PollingIntervalMinutes | No | 5 | Polling frequency (1-60 minutes) |
 | Location | No | Resource group location | Azure region |
 
----
+### ⚠️ Important: Workspace Name vs Workspace ID
 
-## ⚠️ CRITICAL: Workspace Name vs Workspace ID
+**Common mistake:** Using Workspace **ID** instead of Workspace **NAME**
 
-**COMMON MISTAKE:** Using Workspace **ID** instead of Workspace **NAME**
+- ✅ **CORRECT:** `company-log-analytics-workspace-0001` (Name)
+- ❌ **WRONG:** `cab033c7-927c-46d1-bb24-7af8090ae3fc` (Workspace ID)
 
-### ❌ WRONG (Workspace ID - GUID format):
-```
-cab033c7-927c-46d1-bb24-7af8090ae3fc
-```
-
-### ✅ CORRECT (Workspace Name - string format):
-```
-company-log-analytics-workspace-0001
-```
-
-### How to Find Workspace Name:
-1. Azure Portal → **Log Analytics workspaces**
+Find your workspace name:
+1. Azure Portal → Log Analytics workspaces
 2. Click on your workspace
-3. Copy the **Name** field (NOT the Workspace ID!)
+3. Copy the **Name** field (NOT the Workspace ID)
 
-**Example:**
-- Name: `company-log-analytics-workspace-0001` ✅ Use this!
-- Workspace ID: `cab033c7-927c-46d1-bb24-7af8090ae3fc` ❌ Don't use this!
-
----
-
-## 🔄 How It Works
-
-### Architecture
+## How It Works
 
 ```
-┌──────────────────────────────────────┐
-│       SOCRadar Platform              │
-│                                      │
-│  Alarm: OPEN ──────────► RESOLVED   │
-│         ▲                    ▲       │
-└─────────┼────────────────────┼───────┘
-          │ Webhook            │ API PATCH
-          │ (Repo 1)           │ (This Repo)
-┌─────────▼────────────────────┼───────┐
-│    Azure Sentinel            │       │
-│                              │       │
-│  Incident: NEW ──────► CLOSED───┐    │
-│                                │    │
-│  ┌──────────────────────────┐  │    │
-│  │  Logic App               │  │    │
-│  │  (Runs every 5 min)      │  │    │
-│  │                          │  │    │
-│  │  1. Query: Status=Closed │──┘    │
-│  │  2. Filter: SOCRadar-*   │       │
-│  │  3. Extract Alarm ID     │       │
-│  │  4. PATCH SOCRadar API   │───────┘
-│  └──────────────────────────┘       │
-└──────────────────────────────────────┘
+┌─────────────────────────────────┐
+│     SOCRadar Platform           │
+│                                 │
+│  Alarm: OPEN ──────► RESOLVED  │
+│         ▲                ▲      │
+└─────────┼────────────────┼──────┘
+          │ Webhook        │ API PATCH
+          │ (Repo 1)       │ (This Repo)
+┌─────────▼────────────────┼──────┐
+│   Azure Sentinel         │      │
+│                          │      │
+│  Incident: NEW ──► CLOSED───┐   │
+│                            │   │
+│  ┌──────────────────────┐  │   │
+│  │  Logic App           │  │   │
+│  │  (Every 5 minutes)   │  │   │
+│  │                      │  │   │
+│  │  1. Query: Closed    │──┘   │
+│  │  2. Filter: SOCRadar-* │    │
+│  │  3. Extract Alarm ID │     │
+│  │  4. PATCH API        │─────┘
+│  └──────────────────────┘     │
+└────────────────────────────────┘
 ```
 
-### Workflow
+### Query Logic
 
-1. **Every 5 minutes** (configurable), Logic App runs
-2. **Queries Sentinel** for incidents:
-   - Status = "Closed"
-   - Title contains "SOCRadar-AlarmID-"
-   - Modified in last 10 minutes
-3. **For each matching incident:**
-   - Extract alarm ID from title (e.g., "SOCRadar-AlarmID-12345" → 12345)
-   - Call SOCRadar API: `POST /alarms/status/change` with alarm_ids and status: "2" (RESOLVED)
-4. **SOCRadar alarm** automatically updated!
+The Logic App queries Sentinel using KQL:
 
-### Timing Example
+```kql
+SecurityIncident
+| where TimeGenerated > ago(10m)
+| where Status == "Closed"
+| where Title contains "SOCRadar-AlarmID-"
+| summarize arg_max(TimeGenerated, *) by IncidentNumber
+| project Title, IncidentNumber, Status
+```
 
-- **14:00** - User closes incident in Sentinel
-- **14:05** - Logic App polls, finds closed incident, updates SOCRadar
-- **Total delay:** 5 minutes ✅ (acceptable for incident closure)
+For each matching incident:
+- Extract alarm ID from title (e.g., `SOCRadar-AlarmID-12345` → `12345`)
+- Call SOCRadar API: `POST /alarms/status/change` with status "2" (RESOLVED)
 
----
+## Testing
 
-## 🧪 Testing
-
-### Test 1: Verify Deployment
+### Verify Deployment
 
 ```bash
 # Check Logic App status
@@ -165,40 +134,38 @@ az logic workflow show \
 # Expected: "Enabled"
 ```
 
-### Test 2: Manual Trigger
+### Manual Trigger
 
 ```bash
-# Manually run Logic App
+# Run Logic App manually
 az logic workflow run trigger \
   --resource-group <YOUR_RG> \
   --name SOCRadar-CloseAlarm-Polling \
   --trigger-name Recurrence
 ```
 
-### Test 3: End-to-End
+### End-to-End Test
 
-1. Create a test alarm in SOCRadar → Creates incident in Sentinel
-2. Close the incident in Sentinel (Status: Closed)
+1. Create a test alarm in SOCRadar (creates incident in Sentinel)
+2. Close the incident in Sentinel
 3. Wait 5-10 minutes
 4. Verify alarm status in SOCRadar:
 
 ```bash
 curl -X GET \
-  "https://platform.socradar.com/api/companies/<YOUR_COMPANY_ID>/alarms/<ALARM_ID>" \
-  -H "Authorization: Token <YOUR_API_KEY>"
+  "https://platform.socradar.com/api/companies/<COMPANY_ID>/alarms/<ALARM_ID>" \
+  -H "Authorization: Token <API_KEY>"
+
+# Expected response: "status": "RESOLVED"
 ```
 
-Expected: `"status": "RESOLVED"`
-
----
-
-## 📊 Monitoring
+## Monitoring
 
 ### View Run History
 
 **Portal:**
-1. Go to Logic App → Overview → Runs history
-2. Click on any run to see details
+1. Logic App → Overview → Runs history
+2. Click on any run for details
 
 **CLI:**
 ```bash
@@ -210,40 +177,23 @@ az logic workflow run list \
   --output table
 ```
 
-### Check for Errors
+## Troubleshooting
 
-```bash
-az logic workflow run show \
-  --resource-group <YOUR_RG> \
-  --name SOCRadar-CloseAlarm-Polling \
-  --name <RUN_NAME>
-```
+### Logic App Not Running
 
----
-
-## 🔍 Troubleshooting
-
-### Problem: Logic App Not Running
-
-**Symptom:** No runs in history
-
-**Check:**
+**Check state:**
 ```bash
 az logic workflow show \
   --resource-group <YOUR_RG> \
   --name SOCRadar-CloseAlarm-Polling \
-  --query "{state:state, lastTriggerTime:definition.triggers.Recurrence}"
+  --query "state"
 ```
 
 **Solution:** Ensure state is "Enabled"
 
-### Problem: Query Returns No Results
+### Query Returns No Results
 
-**Symptom:** Logic App runs but doesn't update SOCRadar
-
-**Debug:**
-1. Go to Log Analytics workspace
-2. Run query manually:
+**Debug in Log Analytics:**
 ```kql
 SecurityIncident
 | where TimeGenerated > ago(10m)
@@ -252,122 +202,70 @@ SecurityIncident
 | project Title, Status, LastModifiedTime
 ```
 
-**Solutions:**
-- Check incident title format: must contain "SOCRadar-AlarmID-{id}"
-- Verify incidents exist in timeframe
-- Check workspace permissions
+**Verify:**
+- Incident title contains `SOCRadar-AlarmID-{id}`
+- Incidents exist in timeframe
+- Workspace permissions are correct
 
-### Problem: SOCRadar API Error
+### SOCRadar API Error
 
-**Symptom:** Logic App runs but gets 401/403 from SOCRadar
-
-**Check API Key:**
+**Test API key:**
 ```bash
 curl -X GET \
   "https://platform.socradar.com/api/companies/<COMPANY_ID>/alarms" \
   -H "Authorization: Token <API_KEY>"
 ```
 
-**Solutions:**
-- Verify API key is correct
-- Check company ID matches
-- Ensure API key has write permissions
+**Check:**
+- API key is valid
+- Company ID is correct
+- API key has write permissions
 
----
-
-## 💰 Cost Estimate
+## Cost Estimate
 
 **Logic App Consumption Plan:**
 - Runs: 288 per day (every 5 minutes)
 - Actions per run: ~3-5 (varies by closed incidents)
-- Estimated cost: **$5-15/month** (depends on incident volume)
+- Estimated cost: **$5-15/month**
 
-**Cost Optimization:**
+**Optimization:**
 - Increase polling interval to 10-15 minutes
-- Use Standard plan for high volume (predictable cost)
+- Use Standard plan for high volume
 
----
+## Security
 
-## 🔒 Security
+- API Key stored as `securestring` (encrypted)
+- Managed Identity for Azure authentication
+- RBAC: Logic App has **Microsoft Sentinel Responder** role only
+- HTTPS-only communication
+- Secrets never appear in logs
 
-- ✅ API Key stored as `securestring` (encrypted in ARM deployment)
-- ✅ Managed Identity for Azure authentication (no credentials)
-- ✅ RBAC: Logic App has **Microsoft Sentinel Responder** role only
-- ✅ HTTPS-only communication
-- ✅ Secrets never appear in logs
+## Related Repositories
 
----
+**Complete bidirectional sync requires both:**
+1. [Webhook Integration](https://github.com/orcunsami/socradar-sentinel-alarm-connector-api-fork-orcun) - SOCRadar → Sentinel (instant)
+2. This repository - Sentinel → SOCRadar (5-min delay)
 
-## 🆚 v1 vs v2 Comparison
-
-| Feature | v1.0 (Webhook) | v2.0 (Polling) |
-|---------|----------------|----------------|
-| **Deployment** | ❌ Requires manual Portal steps | ✅ Fully automated |
-| **Trigger Type** | ApiConnectionWebhook | Recurrence |
-| **Automation Rule** | Required (caused errors) | Not needed |
-| **Latency** | Instant | 5-10 minutes |
-| **Production Ready** | After manual setup | Immediately |
-| **Customer Friendly** | ❌ Complex setup | ✅ One-click |
-| **Error-Prone** | ✅ "Missing permissions" | ❌ None |
-
-**Decision:** v2.0 polling is better for automated customer deployments.
-
----
-
-## 🤝 Related Repositories
-
-- **Webhook Integration (SOCRadar → Sentinel):** [socradar-sentinel-alarm-connector-api-fork-orcun](https://github.com/orcunsami/socradar-sentinel-alarm-connector-api-fork-orcun)
-
-Both repos work together for full bidirectional sync:
-1. **Webhook repo:** SOCRadar alarms create Sentinel incidents (instant)
-2. **This repo:** Sentinel incident closures update SOCRadar alarms (5-min delay)
-
----
-
-## 📚 FAQ
+## FAQ
 
 **Q: Why polling instead of webhook?**
-A: Webhook triggers require automated webhook subscription registration that's impossible via ARM/CLI. Polling eliminates this complexity while maintaining functionality.
+A: Webhook triggers require manual webhook subscription registration that cannot be automated via ARM/CLI. Polling eliminates this complexity.
 
 **Q: Is 5-minute delay acceptable?**
-A: For incident closure workflow, yes. Incidents aren't closed in real-time anyway.
+A: Yes, for incident closure workflow. Incidents are not closed in real-time anyway.
 
 **Q: Can I change polling interval?**
-A: Yes! Set `PollingIntervalMinutes` parameter (1-60 minutes). Default is 5.
+A: Yes, set `PollingIntervalMinutes` parameter (1-60 minutes).
 
-**Q: Will it process same incident twice?**
+**Q: Will it process the same incident twice?**
 A: No. Query uses `summarize arg_max()` to get latest state only. SOCRadar API is also idempotent.
 
-**Q: What if I have multiple SOCRadar accounts?**
+**Q: Multiple SOCRadar accounts?**
 A: Deploy multiple Logic Apps with different `CompanyId` and `SocradarApiKey`.
 
----
+## Support
 
-## 📝 Changelog
-
-### v2.0.0 (2025-11-17)
-- ✨ **BREAKING:** Switched to polling architecture
-- ✨ Removed webhook trigger (incompatible with automation)
-- ✨ Removed Automation Rule (not needed)
-- ✨ Removed deployment script (not needed)
-- ✨ Zero manual steps required
-- 🐛 Fixed "missing permissions" error permanently
-- ✅ Production-ready on first deployment
-
-### v1.0.0 (2025-11-15)
-- Initial release with webhook trigger
-- Required manual Portal configuration
-
----
-
-## 📞 Support
-
-**Issues?**
-1. Check [Troubleshooting](#-troubleshooting) section
+1. Check [Troubleshooting](#troubleshooting) section
 2. Review Logic App run history
 3. Verify query in Log Analytics
 4. Open GitHub issue with details
-
----
-
-**Happy Automating! 🎉**
